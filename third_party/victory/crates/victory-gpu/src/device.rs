@@ -346,55 +346,21 @@ fn feature_levels(data: *mut c_void) -> HRESULT {
     }
 }
 
-/// Device methods 0x1c8 and 0x218 (`SLOT`). The title calls both
-/// (title+0x2477578 and title+0x24800d5) as `(this, description, interface
-/// id, out)`, asks for `ID3D12PipelineState`, and on success keeps the
-/// object `out` names and draws with it; on failure it goes without that
-/// pipeline, silently. What the descriptions hold is not known: the calls
-/// fail as they always did, with `out` null, and the first ones log the
-/// description's words and what its first word points at, so that the two
-/// methods can be written.
-/// shortcut: not implemented. Answering `S_OK` here without making the
-/// pipeline would hand the title whatever its stack held as an object.
-extern "system" fn unknown_pipeline<const SLOT: usize>(
+/// Device methods 0x1c8 (graphics) and 0x218 (compute) load pipelines from
+/// the title's cache of precompiled native code. On a cache miss the title
+/// creates the same pipeline from its ordinary description (0x2b0 or 0x1f0),
+/// which is the path translated here. Native-only cached pipelines are not
+/// usable by this host, so these lookups deliberately fail and let the title
+/// take its ordinary creation path.
+extern "system" fn precompiled_pipeline(
     _: This,
-    desc: *const u8,
+    _desc: *const c_void,
     _iid: *const Iid,
     out: *mut This,
 ) -> HRESULT {
-    use std::sync::atomic::{AtomicU32, Ordering};
-    static CALLS: [AtomicU32; 2] = [const { AtomicU32::new(0) }; 2];
-    let calls = CALLS[usize::from(SLOT == 0x218)].fetch_add(1, Ordering::Relaxed) + 1;
     if !out.is_null() {
-        // SAFETY: the title's out pointer (a local of its own).
+        // SAFETY: the title's output pointer; COM requires null on failure.
         unsafe { *out = std::ptr::null() };
-    }
-    if calls <= 4 || calls.is_power_of_two() {
-        // Sixteen 64-bit words at `at`, read through the kernel: neither
-        // pointer is known to be mapped.
-        #[cfg(windows)]
-        let words = |at: usize| -> Option<Vec<u64>> {
-            let mut bytes = [0u8; 128];
-            (at != 0 && crate::host::read_into(at as *const u8, &mut bytes)).then(|| {
-                bytes
-                    .as_chunks::<8>().0.iter()
-                    .map(|c| c.iter().rev().fold(0u64, |v, &b| v << 8 | u64::from(b)))
-                    .collect()
-            })
-        };
-        #[cfg(not(windows))]
-        let words = |_: usize| None::<Vec<u64>>;
-        let description = words(desc as usize);
-        let first = description
-            .as_ref()
-            .and_then(|w| words(w[0] as usize));
-        tracing::warn!(
-            slot = format_args!("{:#x}", SLOT),
-            calls,
-            description = format_args!("{description:x?}"),
-            first_points_at = format_args!("{first:x?}"),
-            "a pipeline creation method that is not implemented: the title goes without this pipeline"
-        );
     }
     E_NOTIMPL
 }
@@ -449,10 +415,10 @@ static FUNCTIONS: Table<160> = {
     f[39] = query::create as *const (); // 0x138
     f[41] = signature::create as *const (); // 0x148
     f[48] = queue::create_x as *const (); // 0x180
-    f[57] = unknown_pipeline::<0x1c8> as *const (); // 0x1c8
+    f[57] = precompiled_pipeline as *const (); // 0x1c8
     f[61] = descriptor::create_sampler_x as *const (); // 0x1e8
     f[62] = pipeline::create_compute_x as *const (); // 0x1f0
-    f[67] = unknown_pipeline::<0x218> as *const (); // 0x218
+    f[67] = precompiled_pipeline as *const (); // 0x218
     f[69] = object::ignore as *const (); // 0x228 debug error filter
     f[70] = descriptor::create_placed_srv as *const (); // 0x230
     f[71] = descriptor::create_placed_uav as *const (); // 0x238
@@ -500,6 +466,21 @@ mod tests {
         );
         let missing = slot::<extern "system" fn() -> HRESULT>(device, 0xf0);
         assert_eq!(missing(), E_NOTIMPL);
+    }
+
+    #[test]
+    fn precompiled_pipelines_fail_with_no_object() {
+        type Load = extern "system" fn(This, *const c_void, *const Iid, *mut This) -> HRESULT;
+        let device = device();
+        for offset in [0x1c8, 0x218] {
+            let mut out = device;
+            let load = slot::<Load>(device, offset);
+            assert_eq!(
+                load(device, std::ptr::null(), std::ptr::null(), &mut out),
+                E_NOTIMPL
+            );
+            assert!(out.is_null());
+        }
     }
 
     #[test]
