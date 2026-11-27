@@ -34,6 +34,8 @@ The launcher already exposes a separate **12 GB card** preset. It reduces the dr
 
 The measured Windows + NVIDIA profile also sets `VICTORY_THIN=1` and `VICTORY_JOIN_PARTS=8`. Do not change these blindly: first confirm the exact code paths and semantics in the vendored VIctory revision, then compare output correctness and frame times independently.
 
+The earlier PSO normalization fix for integer render-target blending (`LogicOpEnable`) and stale `RTFormats` past `NumRenderTargets` is already present in `third_party/victory/crates/victory-gpu/src/pipeline/host.rs`. The remaining `0x1c8` / `0x218` warnings are separate device methods, not a reason to reapply that same PSO fix.
+
 ## Controlled test sequence
 
 Keep the game build, save location, scene, camera position, display mode, driver, and cache state constant. Record the first run separately from warm-cache runs.
