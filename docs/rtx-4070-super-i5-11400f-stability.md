@@ -21,6 +21,7 @@ The host's previously shared runtime observations include:
 - A prior overlay sample showing system RAM near 29.7 / 31.9 GB and VRAM near 9.7 / 10.6 GB of the reported budget.
 - Repeated creation failures for device method slots `0x1c8` and `0x218`. In the vendored `victory-gpu/src/device.rs`, both slots currently point to `unknown_pipeline`, return `E_NOTIMPL`, and clear the output pointer. The source comments confirm that the title requests `ID3D12PipelineState`; the description layout is still unknown.
 - Wave32 lowering failures for shader hashes `5dc3b25986622949` and `6f225b641c5b0708`.
+- The tuned profile contains a `VICTORY_WAVE_WIDE_ONLY` allowlist that includes both hashes, but it does not set `VICTORY_WAVE_WIDE=1`. In the vendored shader emitter, the allowlist only scopes the explicit wave-wide fallback after that opt-in is enabled; by itself, the list does not enable the fallback. The source also warns that this form puts group barriers inside branches/loops and previously caused device loss in other kernels, so enabling it globally without a controlled test would be unsafe.
 - Earlier logs also reported texture-heap pressure and dropped draws when no host pipeline was available.
 
 These are diagnostic observations from different runs, not a single controlled benchmark. The low FPS samples captured in loading/menu periods must not be treated as a representative open-world average.
@@ -69,7 +70,7 @@ Run each warm-cache pass for at least 5 minutes after the scene has settled. Rep
 
 - Trace the current VIctory source for every setting in the Windows + NVIDIA profile, especially `VICTORY_THIN` and `VICTORY_JOIN_PARTS`.
 - Recover the description layouts for device methods `0x1c8` and `0x218`, then implement pipeline creation with tests. Their current failure is confirmed in `third_party/victory/crates/victory-gpu/src/device.rs`; the layouts are not yet understood.
-- Reproduce and fix the two Wave32 lowering failures with tests against the reference interpreter.
+- Reproduce the two Wave32 lowering failures; test the allowlisted wave-wide fallback for those hashes only, with device-loss monitoring, then add regression tests before changing the default profile.
 - Audit texture residency and dropped-draw handling under the 12 GB budget.
 - Run the controlled matrix on the target host and publish only measured results.
 
