@@ -11,6 +11,11 @@ use serde::{Deserialize, Serialize};
 use crate::env::Pair;
 
 pub const DISPLAY_MODE: &str = "VICTORY_DISPLAY_MODE";
+/// The size the title renders its output at (Vice-Tay base): `VICTORY_DISPLAY_MODE` only changes
+/// what DXGI reports, the title keeps the size its own settings hold (4K as a Series X wrote them).
+pub const OUTPUT: &str = "VICTORY_OUTPUT";
+/// The sizes the title has a display mode for: `VICTORY_OUTPUT` takes only these.
+pub const TITLE_MODES: [(u32, u32); 5] = [(1280, 720), (1664, 936), (1920, 1080), (2560, 1440), (3840, 2160)];
 pub const WINDOW_MODE: &str = "VICTORY_WINDOW_MODE";
 pub const KEYBOARD: &str = "VICTORY_KEYBOARD";
 pub const LOG: &str = "VICTORY_LOG";
@@ -23,8 +28,9 @@ pub const FRAMETIME_DUMP: &str = "VICTORY_FRAMETIME_DUMP";
 /// Every variable an option may set (the preset's own are in `Preset::overrides`); the tests
 /// check them against VIctory's sources.
 #[cfg(test)]
-pub const ENV_NAMES: [&str; 7] = [
+pub const ENV_NAMES: [&str; 8] = [
     DISPLAY_MODE,
+    OUTPUT,
     WINDOW_MODE,
     KEYBOARD,
     LOG,
@@ -304,7 +310,10 @@ impl Default for LaunchOptions {
     fn default() -> Self {
         LaunchOptions {
             preset: Preset::Fast,
-            resolution: Resolution::Default,
+            // Full HD by default: the title renders at 1280x720 inside instead of 2560x1440
+            // (4K, the size a Series X wrote in its settings). Measured on an RTX 4070 SUPER,
+            // Series X: about 20 fps in the world at 4K, 24-30 at 1080p.
+            resolution: Resolution::P1080,
             custom_width: 1920,
             custom_height: 1080,
             window: WindowMode::Windowed,
@@ -342,6 +351,9 @@ impl LaunchOptions {
         let mut pairs = self.preset.overrides();
         if let Some((w, h)) = self.size() {
             pairs.push((DISPLAY_MODE.to_string(), format!("{w}x{h}")));
+            if TITLE_MODES.contains(&(w, h)) {
+                pairs.push((OUTPUT.to_string(), format!("{w}x{h}")));
+            }
         }
         if self.window == WindowMode::Borderless {
             pairs.push((WINDOW_MODE.to_string(), "borderless".to_string()));
@@ -383,8 +395,10 @@ mod tests {
     use std::path::Path;
 
     #[test]
-    fn the_defaults_set_nothing() {
-        assert!(LaunchOptions::default().env_pairs().is_empty());
+    fn the_defaults_set_only_the_full_hd_size() {
+        let pairs = LaunchOptions::default().env_pairs();
+        let keys: Vec<&str> = pairs.iter().map(|(k, _)| k.as_str()).collect();
+        assert_eq!(keys, [DISPLAY_MODE, OUTPUT], "{pairs:?}");
     }
 
     #[test]
@@ -405,6 +419,7 @@ mod tests {
                 .map(|(_, v)| v.as_str())
         };
         assert_eq!(get(DISPLAY_MODE), Some("2560x1440"));
+        assert_eq!(get(OUTPUT), Some("2560x1440"));
         assert_eq!(get(WINDOW_MODE), Some("borderless"));
         assert_eq!(get(KEYBOARD), Some("azerty"));
         assert_eq!(get(LOG), Some("debug"));
@@ -585,4 +600,25 @@ mod tests {
             }
         }
     }
+    #[test]
+    fn the_output_size_is_set_only_for_the_titles_own_modes() {
+        let output = |resolution| {
+            LaunchOptions { resolution, ..LaunchOptions::default() }
+                .env_pairs()
+                .into_iter()
+                .find(|(k, _)| k == OUTPUT)
+                .map(|(_, v)| v)
+        };
+        assert_eq!(output(Resolution::P1080).as_deref(), Some("1920x1080"));
+        assert_eq!(output(Resolution::P720).as_deref(), Some("1280x720"));
+        assert_eq!(output(Resolution::P900), None);
+        assert_eq!(output(Resolution::Default), None);
+    }
+
+    #[test]
+    fn a_new_launcher_plays_in_full_hd() {
+        let pairs = LaunchOptions::default().env_pairs();
+        assert!(pairs.iter().any(|(k, v)| k == OUTPUT && v == "1920x1080"), "{pairs:?}");
+    }
+
 }

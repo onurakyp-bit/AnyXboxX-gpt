@@ -5,12 +5,13 @@
 [English](../../README.md) · **Français**
 
 > [!NOTE]
-> **Où on en est (26/11/2026)**
+> **Où on en est (27/11/2026)**
 >
 > - ✅ **Le jeu tourne.** GTA VI 1.0.2.1 (build Xbox Series) démarre, joue ses cinématiques et arrive dans le monde ouvert grâce à VIctory, la copie dans `third_party/victory`.
-> - 📈 **25 à 29 fps dans le monde en Full HD, environ 20 en 4K** (mode Series X, RTX 4070 SUPER et i7-13700KF, cache chaud, mesuré le 26/11/2026), contre 14,2 sur la base précédente : `third_party/victory` repose maintenant sur [Vice-Tay](https://github.com/TaynanGT/Vice-Tay), qui garde les tampons du jeu sur la carte, prépare l'image suivante pendant que la carte travaille et répartit le travail sur plusieurs threads. Mesures antérieures : [docs/fr/avancee.md](../fr/avancee.md).
-> - 🖥️ **Forcez le Full HD, pas la 4K, pour gagner des fps.** Le jeu prend la taille de sortie dans ses propres réglages, en 4K tels qu'une Series X les a écrits ; `anyxboxx run --override VICTORY_OUTPUT=1920x1080` le fait rendre en 1280x720 en interne au lieu de 2560x1440. En 4K, c'est la carte graphique qui limite.
-> - ⛔ **Limites connues** : le ray tracing est coupé, donc les zones d'intérieur et à l'ombre sont sombres ; quelques graphismes manquent ; le jeu utilise 28 à 30 Go de RAM, 32 Go sont conseillés.
+> - 📈 **Environ 24 fps médians dans le monde en Full HD, 30 fps (le plafond du jeu) dans les scènes jusqu'à environ 4 000 draws** (mode Series X, RTX 4070 SUPER et i7-13700KF, cache chaud, une partie de 14 minutes par le lanceur le 27/11/2026), environ 20 en 4K, contre 14,2 sur la base précédente. `third_party/victory` repose sur [Vice-Tay](https://github.com/TaynanGT/Vice-Tay), qui garde les tampons du jeu sur la carte, prépare l'image suivante pendant que la carte travaille et répartit le travail sur plusieurs threads ; à partir de 16 processeurs logiques, le lanceur donne plus de place à ces threads (19,6 -> 23,8 fps médians). Les scènes lourdes (7 000 à 11 000 draws) descendent encore à 10-18 fps. Mesures antérieures : [docs/fr/avancee.md](../fr/avancee.md).
+> - 🖥️ **Le Full HD, pas la 4K, pour gagner des fps.** Le lanceur joue maintenant en 1920x1080 par défaut : le jeu rend en 1280x720 en interne au lieu des 2560x1440 de la 4K qu'une Series X a écrite dans ses réglages. Avec `anyxboxx run`, ajoutez `--override VICTORY_OUTPUT=1920x1080`.
+> - 🎮 **Jouable à la souris et au clavier** : cliquez sur l'image du jeu pour piloter la caméra à la souris (F9 la rend), bouton droit pour viser, bouton gauche pour tirer. L'overlay (F10) affiche les fps, le CPU par cœur, le GPU, la RAM, la VRAM et l'occupation de chaque groupe de threads de VIctory.
+> - ⛔ **Limites connues** : le ray tracing est coupé, donc les zones d'intérieur et à l'ombre sont sombres ; quelques graphismes manquent ; le jeu se bride lui-même à 30 fps ; il utilise 20 à 25 Go de RAM, 32 Go sont conseillés.
 
 AnyXboxX exécute des exécutables GDK Xbox (PE32+ x86-64) sous Windows. Il est spécialisé sur un seul build, **Grand Theft Auto VI pour Xbox Series, version 1.0.2.1**, et ne traduit que ce dont ce jeu a besoin : les fonctions système de la console, les shaders RDNA 2 et les appels Direct3D 12.x. Le rendu vient de [VIctory](https://github.com/Marvisak/VIctory) (Marvisak, GPL-3.0 ou ultérieure), copié dans `third_party/victory` avec les pull requests de ses contributeurs, crédités dans [THIRD_PARTY.md](../../THIRD_PARTY.md).
 
@@ -19,7 +20,7 @@ Ce dépôt ne contient ni fichier de jeu, ni clé, ni exécutable, et n'explique
 ## Configuration requise
 
 - Windows 10 ou 11, 64 bits, avec un processeur compatible AVX2.
-- Une carte graphique Direct3D 12 avec le shader model 6.6 et les mesh shaders : GeForce RTX série 20 ou plus récente, ou Radeon RDNA 2 ou plus récente. Une carte de 12 Go manque de mémoire pour les textures ; le lanceur propose un préréglage pour les cartes de 8 et 12 Go.
+- Une carte graphique Direct3D 12 avec le shader model 6.6 et les mesh shaders : GeForce RTX série 20 ou plus récente, ou Radeon RDNA 2 ou plus récente. **Le projet est centré sur NVIDIA** : toutes les mesures et les réglages du lanceur visent les cartes NVIDIA (RTX 4070 SUPER). Les cartes AMD marchent aussi, mais moins bien (moins de fps, plus de défauts graphiques), et reçoivent moins d'attention. Une carte de 12 Go manque de mémoire pour les textures ; le lanceur propose un préréglage pour les cartes de 8 et 12 Go.
 - 32 Go de RAM conseillés, et plus de 30 Go libres sur le disque système (le cache des shaders grossit en jouant).
 - Votre propre copie du build Xbox Series 1.0.2.1 : un dossier qui contient `game_scarlett_master.exe`. Il n'est pas fourni.
 - [Rust](https://rustup.rs/) et Visual Studio 2022 ou 2026 Build Tools avec la charge de travail « Développement desktop en C++ ». VIctory est compilé depuis les sources au premier lancement.
@@ -29,7 +30,7 @@ Ce dépôt ne contient ni fichier de jeu, ni clé, ni exécutable, et n'explique
 ### Avec le lanceur graphique (recommandé)
 
 1. Clonez le dépôt : `git clone https://github.com/LooperSalty/AnyXboxX.git`. VIctory est déjà dans `third_party/victory`.
-2. Récupérez `anyxboxx-launcher.exe` dans la [version launcher-v0.1.0](https://github.com/LooperSalty/AnyXboxX/releases/tag/launcher-v0.1.0) et placez-le dans le dossier cloné, ou compilez-le avec `cargo build --release -p anyxboxx-launcher`.
+2. Récupérez `anyxboxx-launcher.exe` dans la [version launcher-v0.2.0](https://github.com/LooperSalty/AnyXboxX/releases/tag/launcher-v0.2.0) et placez-le dans le dossier cloné, ou compilez-le avec `cargo build --release -p anyxboxx-launcher`.
 3. Double-cliquez sur le lanceur. Sur la page **Dossier du jeu**, choisissez le dossier qui contient `game_scarlett_master.exe`, puis appuyez sur **PLAY**. Le premier démarrage compile VIctory et chauffe le cache des shaders ; jugez la vitesse à partir du second.
 
 Le guide complet, avec les options, les fichiers écrits et le dépannage, est dans [docs/fr/lanceur.md](../fr/lanceur.md) (en anglais : [docs/launcher.md](../../docs/launcher.md)).
@@ -63,10 +64,11 @@ Le graphique est régénéré par `scarlett.py --traduction <dossier du paquet> 
 | Étape | État |
 |---|---|
 | Lanceur graphique Rust `anyxboxx-launcher` et `anyxboxx run` : vérification de la machine, compilation de VIctory, chauffe du cache des shaders, lancement du jeu | ✅ fait |
-| Le build Xbox Series 1.0.2.1 tourne avec VIctory : démarrage, cinématiques, monde ouvert (25 à 29 fps dans le monde en Full HD, environ 20 en 4K, mode Series X, RTX 4070 SUPER) | 🟡 en cours |
+| Le build Xbox Series 1.0.2.1 tourne avec VIctory : démarrage, cinématiques, monde ouvert (environ 24 fps médians dans le monde en Full HD, plafond de 30 fps atteint, environ 20 en 4K, mode Series X, RTX 4070 SUPER) | 🟡 en cours |
 | Émulation de la mémoire unifiée : copies et relectures entre la mémoire de la console et celle du PC (principal coût du CPU) | 🟡 en cours |
 | Éclairage en ray tracing (le constructeur de structures BVH est coupé) | ⏳ à faire |
 | Interrupteur NVIDIA Smooth Motion dans le lanceur, préréglages pour les cartes de 8 et 12 Go | ✅ fait |
+| Full HD par défaut, groupes de threads dimensionnés selon les cœurs du processeur, caméra à la souris, overlay avec CPU par cœur et groupes de threads | ✅ fait |
 | DLL du runtime en Rust : `xmem`, `kernelx`, `d3d12_xs`, `anyxboxx_tls`, `XCRDAPI` ; `xgameruntime` porté et vérifié contre la DLL C++, qui reste celle livrée | 🟡 en cours |
 | Runtime GDK : 210 fonctions sur 396 écrites dans AnyXboxX ; les autres déléguées au runtime GDK de Windows, nommées par la trace | 🟡 en cours |
 | `XTaskQueue`, `XAsync`, `XThread`, `XUser`, `XSystem`, `XGameSave`, `XPackage`, `XStore` écrits par AnyXboxX | ✅ fait |
