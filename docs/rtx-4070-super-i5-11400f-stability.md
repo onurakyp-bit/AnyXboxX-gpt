@@ -19,10 +19,10 @@ The host's previously shared runtime observations include:
 
 - Intermittent performance around 13 FPS, with visible stutter.
 - A prior overlay sample showing system RAM near 29.7 / 31.9 GB and VRAM near 9.7 / 10.6 GB of the reported budget.
-- Repeated creation failures for device method slots `0x1c8` and `0x218`. In the vendored `victory-gpu/src/device.rs`, both slots currently point to `unknown_pipeline`, return `E_NOTIMPL`, and clear the output pointer. The source comments confirm that the title requests `ID3D12PipelineState`; the description layout is still unknown.
+- Calls to device slots `0x1c8` and `0x218`, which are lookups in the title's cache of precompiled native pipelines. Upstream call-site analysis shows that a cache miss makes the title create the same graphics/compute pipeline through its ordinary descriptions (`0x2b0` / `0x1f0`), which are the paths this project translates. These lookups should deliberately return `E_NOTIMPL` with a null output pointer. They are not, by themselves, evidence that a draw or dispatch was dropped.
 - Wave32 lowering failures for shader hashes `5dc3b25986622949` and `6f225b641c5b0708`.
 - The tuned profile contains a `VICTORY_WAVE_WIDE_ONLY` allowlist that includes both hashes, but it does not set `VICTORY_WAVE_WIDE=1`. In the vendored shader emitter, the allowlist only scopes the explicit wave-wide fallback after that opt-in is enabled; by itself, the list does not enable the fallback. The source also warns that this form puts group barriers inside branches/loops and previously caused device loss in other kernels, so enabling it globally without a controlled test would be unsafe.
-- Earlier logs also reported texture-heap pressure and dropped draws when no host pipeline was available.
+- Earlier logs also reported texture-heap pressure and dropped draws when ordinary pipeline creation or shader translation did not produce a host pipeline. Those failures must be traced separately from the two precompiled-cache lookups.
 
 These are diagnostic observations from different runs, not a single controlled benchmark. The low FPS samples captured in loading/menu periods must not be treated as a representative open-world average.
 
@@ -34,7 +34,7 @@ The launcher already exposes a separate **12 GB card** preset. It reduces the dr
 
 The measured Windows + NVIDIA profile also sets `VICTORY_THIN=1` and `VICTORY_JOIN_PARTS=8`. Do not change these blindly: first confirm the exact code paths and semantics in the vendored VIctory revision, then compare output correctness and frame times independently.
 
-The earlier PSO normalization fix for integer render-target blending (`LogicOpEnable`) and stale `RTFormats` past `NumRenderTargets` is already present in `third_party/victory/crates/victory-gpu/src/pipeline/host.rs`. The remaining `0x1c8` / `0x218` warnings are separate device methods, not a reason to reapply that same PSO fix.
+The PSO normalization fix for integer render-target blending (`LogicOpEnable`) and stale `RTFormats` past `NumRenderTargets` is already present in `third_party/victory/crates/victory-gpu/src/pipeline/host.rs`. The `0x1c8` / `0x218` methods are precompiled-cache lookups: keep them failing cleanly so the title takes its ordinary translated creation paths. An upstream attempt to return cached native compute pipelines caused many compute shaders to fail translation and increased dropped draws, so blindly implementing these lookups is a regression, not a fix.
 
 ## Controlled test sequence
 
@@ -71,7 +71,7 @@ Run each warm-cache pass for at least 5 minutes after the scene has settled. Rep
 ## Work still required
 
 - Trace the current VIctory source for every setting in the Windows + NVIDIA profile, especially `VICTORY_THIN` and `VICTORY_JOIN_PARTS`.
-- Recover the description layouts for device methods `0x1c8` and `0x218`, then implement pipeline creation with tests. Their current failure is confirmed in `third_party/victory/crates/victory-gpu/src/device.rs`; the layouts are not yet understood.
+- Keep device slots `0x1c8` and `0x218` as deliberate cache misses, clear the output pointer, and test that contract. Do not implement native cached pipeline loading unless the native program translation path is complete and validated.
 - Reproduce the two Wave32 lowering failures; test the allowlisted wave-wide fallback for those hashes only, with device-loss monitoring, then add regression tests before changing the default profile.
 - Audit texture residency and dropped-draw handling under the 12 GB budget.
 - Run the controlled matrix on the target host and publish only measured results.
