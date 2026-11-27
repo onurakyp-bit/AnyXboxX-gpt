@@ -551,7 +551,7 @@ pub fn fspx_program(part: &[u8]) -> Result<NativeProgram, ShaderError> {
             // when constants are the last parameter.
             RootType::Constants => {
                 let user_sgprs = (u32_at(packet, PACKET_RSRC2)? >> 1) & 0x1f;
-                let next = meta
+                let end = meta
                     .get(FSPX_RECORDS..)
                     .unwrap_or(&[])
                     .as_chunks::<FSPX_RECORD>()
@@ -567,7 +567,12 @@ pub fn fspx_program(part: &[u8]) -> Result<NativeProgram, ShaderError> {
                     .filter(|&start| start > u32::from(u.user_data))
                     .min()
                     .unwrap_or(user_sgprs);
-                next.checked_sub(u32::from(u.user_data))
+                if end > user_sgprs {
+                    return Err(Malformed(
+                        "FSPX root constants exceed the user SGPR range",
+                    ));
+                }
+                end.checked_sub(u32::from(u.user_data))
                     .filter(|&count| count > 0)
                     .ok_or(Malformed("FSPX root constants past the user SGPRs"))?
             }
@@ -1330,6 +1335,12 @@ mod tests {
     #[test]
     fn fspx_root_constants_cannot_extend_past_user_sgprs() {
         let blob = fspx_with_resources(&[(0, 8)], 8);
+        assert!(fspx_program(&blob).is_err());
+    }
+
+    #[test]
+    fn fspx_root_constants_reject_a_next_parameter_past_user_sgprs() {
+        let blob = fspx_with_resources(&[(0, 2), (3, 9)], 8);
         assert!(fspx_program(&blob).is_err());
     }
 
