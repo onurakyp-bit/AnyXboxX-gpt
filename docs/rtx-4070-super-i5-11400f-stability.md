@@ -29,7 +29,7 @@ These are diagnostic observations from different runs, not a single controlled b
 
 The Windows + NVIDIA profile is the maintainer's measured profile, but its published measurements were made on an RTX 4070 SUPER with an i7-13700KF. They do not establish performance on a 6-core / 12-thread i5-11400F.
 
-The launcher already exposes a separate **12 GB card** preset. It reduces the draw-data and buffer reserves from 1536 MB to 1024 MB each and caps the largest texture level at 2048 texels. The launcher documentation explicitly says that this preset has not yet been measured on a 12 GB card. It is therefore a candidate for an A/B test, not a proven fix.
+The launcher already exposes a separate **12 GB card** preset. It reduces the draw-data and buffer reserves from 1024 MB windows and 1536 MB buffer-copy reserves, with the buffer-copy reserve reduced to 1024 MB and caps the largest texture level at 2048 texels. The launcher documentation explicitly says that this preset has not yet been measured on a 12 GB card. It is therefore a candidate for an A/B test, not a proven fix.
 
 The measured Windows + NVIDIA profile also sets `VICTORY_THIN=1` and `VICTORY_JOIN_PARTS=8`. Do not change these blindly: first confirm the exact code paths and semantics in the vendored VIctory revision, then compare output correctness and frame times independently.
 
