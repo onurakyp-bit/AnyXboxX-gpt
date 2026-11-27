@@ -1280,7 +1280,8 @@ mod tests {
         for (_, data) in entries {
             out.extend_from_slice(data);
         }
-        out[12..16].copy_from_slice(&(out.len() as u32).to_le_bytes());
+        let total_size = out.len() as u32;
+        out[12..16].copy_from_slice(&total_size.to_le_bytes());
         out
     }
 
