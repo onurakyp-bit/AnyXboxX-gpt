@@ -546,6 +546,31 @@ pub fn fspx_program(part: &[u8]) -> Result<NativeProgram, ShaderError> {
             RootType::Descriptor => 2,
             // The code holds its words; no user data.
             RootType::ImmediateSampler => 0,
+            // FSPX records do not store the dword count of root constants.
+            // Their range ends at the next root parameter, or at USER_SGPR
+            // when constants are the last parameter.
+            RootType::Constants => {
+                let user_sgprs = (u32_at(packet, PACKET_RSRC2)? >> 1) & 0x1f;
+                let next = meta
+                    .get(FSPX_RECORDS..)
+                    .unwrap_or(&[])
+                    .as_chunks::<FSPX_RECORD>()
+                    .0
+                    .iter()
+                    .take_while(|record| record[0] != 0x43)
+                    .filter(|record| {
+                        record[0] == 0x41
+                            && RootType::from_raw(record[5].into())
+                                != RootType::ImmediateSampler
+                    })
+                    .map(|record| u32::from(record[21]))
+                    .filter(|&start| start > u32::from(u.user_data))
+                    .min()
+                    .unwrap_or(user_sgprs);
+                next.checked_sub(u32::from(u.user_data))
+                    .filter(|&count| count > 0)
+                    .ok_or(Malformed("FSPX root constants past the user SGPRs"))?
+            }
             _ => return Err(Malformed("an FSPX resource of an unknown root type")),
         };
         if sgprs > 0 && !layout.iter().any(|p| p.slot == u.slot) {
@@ -1213,6 +1238,90 @@ mod tests {
             .map(|p| p.stage)
             .collect();
         assert_eq!(stages, [HwStage::Es, HwStage::Vs]);
+    }
+
+    /// A minimal FSPX container with compute packet, code, and resource records.
+    fn fspx_with_resources(resources: &[(u8, u8)], user_sgprs: u32) -> Vec<u8> {
+        let mut packet = vec![0u8; 0x1c];
+        for (at, value) in [(PACKET_THREADS, 8u16), (PACKET_THREADS + 2, 8), (PACKET_THREADS + 4, 1)] {
+            packet[at..at + 2].copy_from_slice(&value.to_le_bytes());
+        }
+        packet[PACKET_RSRC2..PACKET_RSRC2 + 4]
+            .copy_from_slice(&(user_sgprs << 1).to_le_bytes());
+
+        let code = [0x00, 0x00, 0x80, 0xbf];
+        let mut meta = vec![0u8; FSPX_RECORDS + (resources.len() + 1) * FSPX_RECORD];
+        meta[8..12].copy_from_slice(&1u32.to_le_bytes());
+        for (i, &(root, user_data)) in resources.iter().enumerate() {
+            let at = FSPX_RECORDS + i * FSPX_RECORD;
+            meta[at] = 0x41;
+            meta[at + 4] = 2; // CBV
+            meta[at + 5] = root;
+            meta[at + 12..at + 16].copy_from_slice(&(i as u32).to_le_bytes());
+            meta[at + 20] = 1;
+            meta[at + 21] = user_data;
+            meta[at + 22] = i as u8;
+        }
+        meta[FSPX_RECORDS + resources.len() * FSPX_RECORD] = 0x43;
+
+        let entries = [(FSPX_PACKET, packet.as_slice()), (FSPX_CODE, code.as_slice()), (FSPX_METADATA, meta.as_slice())];
+        let mut out = vec![0u8; FSPX_HEADER + entries.len() * 16];
+        out[..4].copy_from_slice(b"FSPX");
+        out[4..8].copy_from_slice(&FSPX_VERSION.to_le_bytes());
+        out[8..12].copy_from_slice(&(entries.len() as u32).to_le_bytes());
+        let mut offset = out.len();
+        for (i, (kind, data)) in entries.iter().enumerate() {
+            let at = FSPX_HEADER + i * 16;
+            out[at..at + 4].copy_from_slice(&kind.to_le_bytes());
+            out[at + 4..at + 8].copy_from_slice(&(offset as u32).to_le_bytes());
+            out[at + 8..at + 12].copy_from_slice(&(data.len() as u32).to_le_bytes());
+            offset += data.len();
+        }
+        for (_, data) in entries {
+            out.extend_from_slice(data);
+        }
+        out[12..16].copy_from_slice(&(out.len() as u32).to_le_bytes());
+        out
+    }
+
+    #[test]
+    fn fspx_root_constants_end_at_the_next_parameter() {
+        let blob = fspx_with_resources(&[(0, 2), (3, 6)], 8);
+        let p = fspx_program(&blob).unwrap();
+        assert_eq!(
+            p.layout,
+            [
+                RootParam {
+                    root: RootType::Constants,
+                    table_offset_dwords: 0,
+                    sgprs: 4,
+                    base_register: 0,
+                    user_data: 2,
+                    slot: 0,
+                },
+                RootParam {
+                    root: RootType::Table,
+                    table_offset_dwords: 0,
+                    sgprs: 1,
+                    base_register: 1,
+                    user_data: 6,
+                    slot: 1,
+                },
+            ]
+        );
+    }
+
+    #[test]
+    fn fspx_last_root_constants_end_at_user_sgprs() {
+        let p = fspx_program(&fspx_with_resources(&[(0, 2)], 8)).unwrap();
+        assert_eq!(p.layout[0].root, RootType::Constants);
+        assert_eq!(p.layout[0].sgprs, 6);
+    }
+
+    #[test]
+    fn fspx_root_constants_cannot_extend_past_user_sgprs() {
+        let blob = fspx_with_resources(&[(0, 8)], 8);
+        assert!(fspx_program(&blob).is_err());
     }
 
     #[test]
