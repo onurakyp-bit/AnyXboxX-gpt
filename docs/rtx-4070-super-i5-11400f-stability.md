@@ -19,7 +19,7 @@ The host's previously shared runtime observations include:
 
 - Intermittent performance around 13 FPS, with visible stutter.
 - A prior overlay sample showing system RAM near 29.7 / 31.9 GB and VRAM near 9.7 / 10.6 GB of the reported budget.
-- Repeated host-pipeline creation warnings for method slots `0x1c8` and `0x218`.
+- Repeated creation failures for device method slots `0x1c8` and `0x218`. In the vendored `victory-gpu/src/device.rs`, both slots currently point to `unknown_pipeline`, return `E_NOTIMPL`, and clear the output pointer. The source comments confirm that the title requests `ID3D12PipelineState`; the description layout is still unknown.
 - Wave32 lowering failures for shader hashes `5dc3b25986622949` and `6f225b641c5b0708`.
 - Earlier logs also reported texture-heap pressure and dropped draws when no host pipeline was available.
 
@@ -68,7 +68,7 @@ Run each warm-cache pass for at least 5 minutes after the scene has settled. Rep
 ## Work still required
 
 - Trace the current VIctory source for every setting in the Windows + NVIDIA profile, especially `VICTORY_THIN` and `VICTORY_JOIN_PARTS`.
-- Trace the two repeated unsupported pipeline method slots to their creation/translation paths.
+- Recover the description layouts for device methods `0x1c8` and `0x218`, then implement pipeline creation with tests. Their current failure is confirmed in `third_party/victory/crates/victory-gpu/src/device.rs`; the layouts are not yet understood.
 - Reproduce and fix the two Wave32 lowering failures with tests against the reference interpreter.
 - Audit texture residency and dropped-draw handling under the 12 GB budget.
 - Run the controlled matrix on the target host and publish only measured results.
