@@ -1243,7 +1243,11 @@ mod tests {
     /// A minimal FSPX container with compute packet, code, and resource records.
     fn fspx_with_resources(resources: &[(u8, u8)], user_sgprs: u32) -> Vec<u8> {
         let mut packet = vec![0u8; 0x1c];
-        for (at, value) in [(PACKET_THREADS, 8u16), (PACKET_THREADS + 2, 8), (PACKET_THREADS + 4, 1)] {
+        for (at, value) in [
+            (PACKET_THREADS, 8u16),
+            (PACKET_THREADS + 2, 8),
+            (PACKET_THREADS + 4, 1),
+        ] {
             packet[at..at + 2].copy_from_slice(&value.to_le_bytes());
         }
         packet[PACKET_RSRC2..PACKET_RSRC2 + 4]
@@ -1264,7 +1268,11 @@ mod tests {
         }
         meta[FSPX_RECORDS + resources.len() * FSPX_RECORD] = 0x43;
 
-        let entries = [(FSPX_PACKET, packet.as_slice()), (FSPX_CODE, code.as_slice()), (FSPX_METADATA, meta.as_slice())];
+        let entries = [
+            (FSPX_PACKET, packet.as_slice()),
+            (FSPX_CODE, code.as_slice()),
+            (FSPX_METADATA, meta.as_slice()),
+        ];
         let mut out = vec![0u8; FSPX_HEADER + entries.len() * 16];
         out[..4].copy_from_slice(b"FSPX");
         out[4..8].copy_from_slice(&FSPX_VERSION.to_le_bytes());
